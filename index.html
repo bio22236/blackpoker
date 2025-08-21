@@ -16,18 +16,13 @@
   .zone{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:8px;margin-bottom:10px}
   .zone h3{font-size:13px;margin:0 0 6px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
   .row{display:flex;gap:8px;flex-wrap:wrap}
-  .char{border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:76px;min-height:68px;background:#161b31}
+  .char{border:1px solid var(--line);border-radius:10px;padding:6px;background:#161b31;min-width:96px;min-height:120px;display:flex;align-items:center;justify-content:center}
   .char.drive{opacity:.7;transform:skewX(-6deg)}
-  .char .title{font-size:12px;color:var(--muted)}
-  .char .value{font-size:20px;font-weight:700}
-  .char .tags{font-size:11px;color:#b7c0ec}
   .char.mine{outline:1px solid #4fc3f7}
   .char.sel{box-shadow:0 0 0 2px var(--accent) inset}
-  .card{border:1px solid var(--line);border-radius:8px;background:#0f152d;min-width:48px;min-height:68px;padding:4px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;cursor:pointer}
+  .card{border:1px solid var(--line);border-radius:8px;background:#0f152d;min-width:82px;min-height:116px;padding:4px;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .card:hover{outline:2px solid var(--accent)}
-  .card .rk{font-weight:800}
-  .card .st{font-size:12px}
-  .hand{display:flex;gap:6px;flex-wrap:wrap}
+  .hand{display:flex;gap:8px;flex-wrap:wrap}
   .log{flex:1;overflow:auto;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap}
   .pill{padding:2px 8px;border-radius:999px;background:#101635;border:1px solid var(--line);font-size:12px}
   .header-row{display:flex;justify-content:space-between;align-items:center}
@@ -35,6 +30,11 @@
   .num{font-variant-numeric:tabular-nums}
   .hint{color:#b7c0ec;font-size:12px}
   .sep{height:6px}
+  button{background:#1c2442;color:var(--text);border:1px solid var(--line);padding:8px 10px;border-radius:10px;cursor:pointer}
+  button.primary{background:#1c3461;border-color:#34518d}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  img.cardimg{width:90px;height:auto;display:block}
+  img.handimg{width:72px;height:auto;display:block}
 </style>
 </head>
 <body>
@@ -108,13 +108,18 @@
 </div>
 
 <script>
-// ========= ルール準拠の最小実装 =========
-const SUITS=["♠","♡","♢","♣"], SUIT_KEYS=["S","H","D","C"];
+// ========= ルール準拠の最小実装（画像カード対応版） =========
+const SUIT_KEYS=["S","H","D","C"];
 const RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
 function rankValue(r){ if(r==="A")return 1; if(r==="J")return 11; if(r==="Q")return 12; if(r==="K")return 13; if(r==="Joker")return 0; return parseInt(r,10); }
 
 let G=null;
 let CPU={enabled:true,level:'normal'};
+
+// 画像パス生成（cards_black/<S|H|D|C>_<A|2..10|J|Q|K>.svg）
+function assetPath(card){
+  return `cards_black/${card.suit}_${card.rank}.svg`;
+}
 
 function buildCard(id,s,r){ return {id,suit:s,rank:r,value:rankValue(r)}; }
 function buildFull54(){ const a=[]; let id=0; for(const s of SUIT_KEYS){ for(const r of RANKS){ a.push(buildCard(id++,s,r)); } } a.push(buildCard(id++,"J","Joker")); a.push(buildCard(id++,"J","Joker")); return a; }
@@ -127,8 +132,7 @@ function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
 function newPlayer(deck){ return { life:deck.slice().reverse(), hand:[], grave:[], field:[] }; }
 function log(t){ const el=document.getElementById("log"); el.textContent+=t+"\n"; el.scrollTop=el.scrollHeight; }
-function suitGlyph(s){ return s==="S"?"♠":s==="H"?"♡":s==="D"?"♢":"♣"; }
-function cardLabel(c){ return c.rank+" "+suitGlyph(c.suit); }
+function cardLabel(c){ const s = {S:"♠",H:"♡",D:"♢",C:"♣"}[c.suit] || "?"; return c.rank+" "+s; }
 function lifeCount(p){ return p.life.length; }
 function draw(p,n=1){ const res=[]; for(let i=0;i<n;i++){ if(p.life.length===0)break; res.push(p.life.pop()); } p.hand.push(...res); return res; }
 function takeDamage(p,d){ const moved=[]; for(let i=0;i<d;i++){ if(p.life.length===0)break; const top=p.life.pop(); p.grave.push(top); moved.push(top);} return moved; }
@@ -180,16 +184,20 @@ function startGame(){
   G.turn=1; updateAll();
 }
 
-// ==== UI ====
-function renderField(pi,mount){
+// ==== UI（画像カード表示） ====
+function renderField(pi, mount){
   const pls=G.players[pi]; mount.innerHTML='';
   for(const ch of pls.field){
     const box=document.createElement('div'); box.className='char'+(ch.drive?' drive':'')+(pi===G.current?' mine':'');
-    const t=document.createElement('div'); t.className='title'; t.textContent=ch.type==="bulwark"?"防壁":"兵士";
-    const v=document.createElement('div'); v.className='value'; v.textContent=ch.type==="bulwark"?"?":charPower(ch);
-    const tg=document.createElement('div'); tg.className='tags'; tg.textContent=(ch.drive?"ドライブ":"チャージ");
-    box.append(t,v,tg);
-    box.addEventListener('click',()=>onCharClick(pi,ch.cid,box));
+    box.dataset.pid = pi; box.dataset.cid = ch.cid;
+
+    const img=document.createElement('img');
+    img.className='cardimg';
+    if(ch.type==='bulwark'){ img.src='cards_black/back.svg'; img.alt='防壁'; }
+    else { const top=ch.cards[0]; img.src=assetPath({suit:top.suit, rank:top.rank}); img.alt='兵士'; }
+
+    box.addEventListener('click', ()=>onCharClick(pi, ch.cid, box));
+    box.innerHTML=''; box.appendChild(img);
     mount.appendChild(box);
   }
 }
@@ -198,9 +206,9 @@ function renderHand(){
   const me=G.players[G.current];
   for(const c of me.hand){
     const el=document.createElement('div'); el.className='card'; el.dataset.id=c.id;
-    const rk=document.createElement('div'); rk.className='rk'; rk.textContent=c.rank;
-    const st=document.createElement('div'); st.className='st'; st.textContent=suitGlyph(c.suit);
-    el.append(rk,st); el.addEventListener('click',()=>onHandClick(c));
+    const img=document.createElement('img'); img.className='handimg'; img.src=assetPath(c); img.alt=c.rank+' '+c.suit;
+    el.appendChild(img);
+    el.addEventListener('click', ()=>onHandClick(c));
     hand.appendChild(el);
   }
 }
