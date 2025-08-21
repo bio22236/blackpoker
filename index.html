@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BlackPoker 8th - Entry20 最小プレー（PCブラウザ）</title>
+<style>
+  :root{
+    --bg:#0f1221; --card:#1a203a; --ui:#141a2f; --line:#2c355d; --text:#e8ebff; --muted:#a9b3e6; --accent:#8ad1ff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:linear-gradient(180deg,#0b0f1d,#0f1221 40%,#0b0f1d);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Helvetica,Arial,"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif}
+  header{padding:12px 16px;border-bottom:1px solid var(--line);background:#0c1020;position:sticky;top:0;z-index:10}
+  h1{font-size:18px;margin:0}
+  #root{display:grid;grid-template-columns:1fr 380px;gap:12px;min-height:100vh}
+  .board{padding:12px}
+  .sidebar{border-left:1px solid var(--line);background:#0c1020;display:flex;flex-direction:column;min-height:0}
+  .zone{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:8px;margin-bottom:10px}
+  .zone h3{font-size:13px;margin:0 0 6px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+  .row{display:flex;gap:8px;flex-wrap:wrap}
+  .stack{display:flex;gap:6px;flex-wrap:wrap}
+  .char{border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:76px;min-height:68px;background:#161b31;position:relative}
+  .char.drive{opacity:.7;transform:skewX(-6deg)}
+  .char .title{font-size:12px;color:var(--muted)}
+  .char .value{font-size:20px;font-weight:700}
+  .char .tags{font-size:11px;color:#b7c0ec}
+  .char.mine{outline:1px solid #4fc3f7}
+  .char.sel{box-shadow:0 0 0 2px var(--accent) inset}
+  .card{border:1px solid var(--line);border-radius:8px;background:#0f152d;min-width:48px;min-height:68px;padding:4px;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;cursor:pointer}
+  .card:hover{outline:2px solid var(--accent)}
+  .card .rk{font-weight:800}
+  .card .st{font-size:12px}
+  .hand{display:flex;gap:6px;flex-wrap:wrap}
+  .controls{padding:10px;border-top:1px solid var(--line);background:#0c1020;position:sticky;bottom:0}
+  .btns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+  button{background:#1c2442;color:var(--text);border:1px solid var(--line);padding:8px 10px;border-radius:10px;cursor:pointer}
+  button.primary{background:#1c3461;border-color:#34518d}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .log{flex:1;overflow:auto;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap}
+  .pill{padding:2px 8px;border-radius:999px;background:#101635;border:1px solid var(--line);font-size:12px}
+  .header-row{display:flex;justify-content:space-between;align-items:center}
+  .toprow,.bottomrow{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:10px}
+  .num{font-variant-numeric:tabular-nums}
+  .hint{color:#b7c0ec;font-size:12px}
+  .sep{height:6px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<header class="header-row">
+  <h1>BlackPoker 8th｜Entry20 最小プレー（2人対戦・ローカル）</h1>
+  <div class="pill" id="turnInfo">準備中…</div>
+</header>
+<div style="padding:8px 16px;display:flex;gap:16px;align-items:center;border-bottom:1px solid var(--line);background:#0c1020;">
+  <label class="hint"><input type="checkbox" id="cpuMode" checked> CPU対戦（P2がNPC）</label>
+  <label class="hint" style="display:inline-flex;align-items:center;gap:6px;">難易度
+    <select id="cpuLevel">
+      <option value="easy">EASY</option>
+      <option value="normal" selected>NORMAL</option>
+      <option value="hard">HARD</option>
+    </select>
+  </label>
+  <span class="hint">・CPUは簡易AIで行動します（防壁→召喚→攻撃→エンド）。</span>
+</div>
+<div id="root">
+  <main class="board" id="board">
+    <section class="zone">
+      <h3>プレイヤー2（上） <span>ライフ:<span class="num" id="p1Life">-</span>｜手札:<span class="num" id="p1Hand">-</span>｜墓地:<span class="num" id="p1Grave">-</span></span></h3>
+      <div class="toprow">
+        <div>
+          <div class="hint">場（上段：P2のキャラクター）</div>
+          <div class="row" id="p1Field"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="zone">
+      <h3>プレイヤー1（下・現在の手札表示） <span>ライフ:<span class="num" id="p0Life">-</span>｜手札:<span class="num" id="p0Hand">-</span>｜墓地:<span class="num" id="p0Grave">-</span></span></h3>
+      <div class="bottomrow">
+        <div>
+          <div class="hint">場（下段：P1のキャラクター）</div>
+          <div class="row" id="p0Field"></div>
+        </div>
+        <div>
+          <div class="hint">手札（現在ターンプレイヤーのみ表示）</div>
+          <div class="hand" id="hand"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <aside class="sidebar">
+    <div class="zone">
+      <div class="header-row">
+        <h3>アクション</h3>
+        <label class="hint"><input type="checkbox" id="useEntry20" checked> Entry20デッキ</label>
+      </div>
+      <div class="btns">
+        <button id="btnBulwark" class="primary">防壁設置（$L）</button>
+        <button id="btnSoldier" class="primary">兵士召喚（$BL）</button>
+        <button id="btnHero" class="primary">英雄召喚（$BBL）</button>
+        <button id="btnAce" class="primary">エース召喚（$L）</button>
+        <button id="btnAttack">アタック</button>
+        <button id="btnEnd">エンド</button>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <button id="btnStart" class="primary">ゲーム開始</button>
+        <button id="btnReset">リセット</button>
+      </div>
+      <div class="sep"></div>
+      <div class="hint">・各アクションはクリック後に対象選択の案内が出ます。<br>・アタック→ブロック→ダメージ判定は自動で順に処理します。</div>
+    </div>
+
+    <div class="zone" style="min-height:240px;">
+      <h3>ログ</h3>
+      <div id="log" class="log"></div>
+    </div>
+  </aside>
+</div>
+<script>
+// ========= ルール準拠の最小実装 =========
+// ・ベース: 8th 共通ルール + 8th アクションリスト(ライト相当) + 公式フレーム「エントリー20」
+// ・未実装: 速攻/装備/魔法系/魔術士/フォグ/切札 など
+// ・攻撃/防御は「兵士(=2-10,J,Q,K,A)」と防壁のみ。数字比較/防壁判定/直接ダメージのみ対応。
+
+const SUITS = ["♠","♡","♢","♣"]; // 表示用
+const SUIT_KEYS = ["S","H","D","C"]; // 内部用
+const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"]; // Jokerは別扱い
+
+function rankValue(r){
+  if(r === "A") return 1;
+  if(r === "J") return 11;
+  if(r === "Q") return 12;
+  if(r === "K") return 13;
+  if(r === "Joker") return 0;
+  return parseInt(r,10);
+}
+
+let G = null; // ゲーム全体状態
+let CPU = { enabled:true, level:'normal' };
+
+function buildCard(id, suitKey, rank){
+  return {id, suit:suitKey, rank, value:rankValue(rank)};
+}
+
+function buildFull54(){
+  const cards=[]; let id=0;
+  for(const s of SUIT_KEYS){
+    for(const r of RANKS){ cards.push(buildCard(id++, s, r)); }
+  }
+  // Joker x2
+  cards.push(buildCard(id++, "J", "Joker"));
+  cards.push(buildCard(id++, "J", "Joker"));
+  return cards;
+}
+
+function buildEntry20(){
+  const picks = [
+    ["S",["A","2","3","4","5"]],
+    ["H",["A","8","9","10","J"]],
+    ["D",["A","3","7","10","Q"]],
+    ["C",["A","5","6","10","K"]],
+  ];
+  const cards=[]; let id=0;
+  for(const [s, ranks] of picks){
+    for(const r of ranks){ cards.push(buildCard(id++, s, r)); }
+  }
+  return cards;
+}
+
+function shuffle(a){
+  for(let i=a.length-1;i>0;i--){ const j=(Math.random()* (i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+
+function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
+
+function newPlayer(deck){
+  return {
+    life: deck.slice().reverse(), // top = life[life.length-1]
+    hand: [],
+    grave: [],
+    field: [], // キャラクター配列
+  };
+}
+
+function log(msg){ const el=document.getElementById("log"); el.textContent += msg+"\n"; el.scrollTop = el.scrollHeight; }
+
+function suitGlyph(s){ return s==="S"?"♠":s==="H"?"♡":s==="D"?"♢":"♣"; }
+
+function cardLabel(c){ return c.rank+" "+suitGlyph(c.suit); }
+
+function lifeCount(p){ return p.life.length; }
+
+function draw(p, n=1){
+  const res=[];
+  for(let i=0;i<n;i++){
+    if(p.life.length===0) break;
+    res.push(p.life.pop());
+  }
+  p.hand.push(...res);
+  return res;
+}
+
+function takeDamage(p, dmg){
+  let moved=[]; for(let i=0;i<dmg;i++){ if(p.life.length===0) break; const top=p.life.pop(); p.grave.push(top); moved.push(top); }
+  return moved;
+}
+
+function addToGrave(p, cards){
+  for(const c of cards){ p.grave.push(c); }
+}
+
+function removeFrom(arr, pred){
+  const idx = arr.findIndex(pred);
+  if(idx>=0){ return arr.splice(idx,1)[0]; }
+  return null;
+}
+
+// キャラクター表現: { cid, type:"soldier"|"bulwark", cards:[Card], drive:false, bornTurn:number }
+let nextCharId=1;
+
+function spawnCharacter(p, type, cards){
+  p.field.push({ cid: nextCharId++, type, cards: deepClone(cards), drive:false, bornTurn:G.turn });
+}
+
+function charPower(ch){
+  if(ch.type!=="bulwark") return ch.cards.reduce((a,c)=>a+rankValue(c.rank),0);
+  return 0; // 防壁はサイズ比較に使わない
+}
+
+function isSoldier(ch){ return ch.type!=="bulwark"; }
+
+function hasReady(ch){ return !ch.drive; }
+
+function canAttack(ch){
+  // このターン場に出たキャラは不可（<速攻>未実装）
+  return isSoldier(ch) && hasReady(ch) && ch.bornTurn < G.turn;
+}
+
+function anyChargedBulwark(p){ return p.field.some(ch=>ch.type==="bulwark" && !ch.drive); }
+
+function driveOneBulwark(p){ const t = p.field.find(ch=>ch.type==="bulwark" && !ch.drive); if(!t) return false; t.drive=true; return true; }
+
+function toGraveFromField(p, ch){
+  const idx = p.field.findIndex(x=>x.cid===ch.cid);
+  if(idx>=0){
+    const removed = p.field.splice(idx,1)[0];
+    p.grave.push(...removed.cards);
+    triggerGenerationShift(p, removed.cards);
+  }
+}
+
+function triggerGenerationShift(p, cards){
+  // Joker,A,J,Q,K が自分の場から墓地に行くたび誘発
+  const targets = cards.filter(c=>["Joker","A","J","Q","K"].includes(c.rank));
+  for(const _ of targets){
+    while(p.life.length>0){
+      const top = p.life.pop();
+      if(["Joker","A","J","Q","K"].includes(top.rank)){
+        p.hand.push(top); break;
+      }else{
+        p.grave.push(top);
+      }
+    }
+  }
+}
+
+function checkWin(){
+  const p0dead = G.players[0].life.length===0;
+  const p1dead = G.players[1].life.length===0;
+  if(p0dead||p1dead){
+    const msg = p0dead && p1dead ? "引き分け！両者ライフ0" : p0dead ? "プレイヤー2の勝ち！(P1ライフ0)" : "プレイヤー1の勝ち！(P2ライフ0)";
+    log("[勝敗] "+msg);
+    G.ended=true;
+    updateAll();
+  }
+}
+
+function startGame(){
+  const useE20 = document.getElementById('useEntry20').checked;
+  const deck0 = shuffle(useE20? buildEntry20(): buildFull54());
+  const deck1 = shuffle(useE20? buildEntry20(): buildFull54());
+  G = { turn:0, phase:"main", current:0, step:"main", selecting:null, ended:false,
+        players:[ newPlayer(deck0), newPlayer(deck1) ], attackCtx:null };
+
+  // スタート手札：7枚
+  draw(G.players[0],7); draw(G.players[1],7);
+  log("[開始] 各プレイヤー手札7枚");
+
+  /
