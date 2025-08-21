@@ -5,9 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>BlackPoker 8th - Entry20 最小プレー（PCブラウザ）</title>
 <style>
-  :root{
-    --bg:#0f1221; --card:#1a203a; --ui:#141a2f; --line:#2c355d; --text:#e8ebff; --muted:#a9b3e6; --accent:#8ad1ff;
-  }
+  :root{--bg:#0f1221;--card:#1a203a;--ui:#141a2f;--line:#2c355d;--text:#e8ebff;--muted:#a9b3e6;--accent:#8ad1ff;}
   *{box-sizing:border-box}
   body{margin:0;background:linear-gradient(180deg,#0b0f1d,#0f1221 40%,#0b0f1d);color:var(--text);font-family:ui-sans-serif,system-ui,Segoe UI,Helvetica,Arial,"Hiragino Kaku Gothic ProN","Noto Sans JP",Meiryo,sans-serif}
   header{padding:12px 16px;border-bottom:1px solid var(--line);background:#0c1020;position:sticky;top:0;z-index:10}
@@ -18,8 +16,7 @@
   .zone{border:1px solid var(--line);border-radius:12px;background:var(--card);padding:8px;margin-bottom:10px}
   .zone h3{font-size:13px;margin:0 0 6px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
   .row{display:flex;gap:8px;flex-wrap:wrap}
-  .stack{display:flex;gap:6px;flex-wrap:wrap}
-  .char{border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:76px;min-height:68px;background:#161b31;position:relative}
+  .char{border:1px solid var(--line);border-radius:10px;padding:6px 8px;min-width:76px;min-height:68px;background:#161b31}
   .char.drive{opacity:.7;transform:skewX(-6deg)}
   .char .title{font-size:12px;color:var(--muted)}
   .char .value{font-size:20px;font-weight:700}
@@ -31,11 +28,6 @@
   .card .rk{font-weight:800}
   .card .st{font-size:12px}
   .hand{display:flex;gap:6px;flex-wrap:wrap}
-  .controls{padding:10px;border-top:1px solid var(--line);background:#0c1020;position:sticky;bottom:0}
-  .btns{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
-  button{background:#1c2442;color:var(--text);border:1px solid var(--line);padding:8px 10px;border-radius:10px;cursor:pointer}
-  button.primary{background:#1c3461;border-color:#34518d}
-  button:disabled{opacity:.5;cursor:not-allowed}
   .log{flex:1;overflow:auto;padding:8px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap}
   .pill{padding:2px 8px;border-radius:999px;background:#101635;border:1px solid var(--line);font-size:12px}
   .header-row{display:flex;justify-content:space-between;align-items:center}
@@ -43,7 +35,6 @@
   .num{font-variant-numeric:tabular-nums}
   .hint{color:#b7c0ec;font-size:12px}
   .sep{height:6px}
-  .hidden{display:none}
 </style>
 </head>
 <body>
@@ -73,7 +64,6 @@
         </div>
       </div>
     </section>
-
     <section class="zone">
       <h3>プレイヤー1（下・現在の手札表示） <span>ライフ:<span class="num" id="p0Life">-</span>｜手札:<span class="num" id="p0Hand">-</span>｜墓地:<span class="num" id="p0Grave">-</span></span></h3>
       <div class="bottomrow">
@@ -94,7 +84,7 @@
         <h3>アクション</h3>
         <label class="hint"><input type="checkbox" id="useEntry20" checked> Entry20デッキ</label>
       </div>
-      <div class="btns">
+      <div class="btns" style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
         <button id="btnBulwark" class="primary">防壁設置（$L）</button>
         <button id="btnSoldier" class="primary">兵士召喚（$BL）</button>
         <button id="btnHero" class="primary">英雄召喚（$BBL）</button>
@@ -110,467 +100,316 @@
       <div class="sep"></div>
       <div class="hint">・各アクションはクリック後に対象選択の案内が出ます。<br>・アタック→ブロック→ダメージ判定は自動で順に処理します。</div>
     </div>
-
     <div class="zone" style="min-height:240px;">
       <h3>ログ</h3>
       <div id="log" class="log"></div>
     </div>
   </aside>
 </div>
+
 <script>
 // ========= ルール準拠の最小実装 =========
-// ・ベース: 8th 共通ルール + 8th アクションリスト(ライト相当) + 公式フレーム「エントリー20」
-// ・未実装: 速攻/装備/魔法系/魔術士/フォグ/切札 など
-// ・攻撃/防御は「兵士(=2-10,J,Q,K,A)」と防壁のみ。数字比較/防壁判定/直接ダメージのみ対応。
+const SUITS=["♠","♡","♢","♣"], SUIT_KEYS=["S","H","D","C"];
+const RANKS=["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+function rankValue(r){ if(r==="A")return 1; if(r==="J")return 11; if(r==="Q")return 12; if(r==="K")return 13; if(r==="Joker")return 0; return parseInt(r,10); }
 
-const SUITS = ["♠","♡","♢","♣"]; // 表示用
-const SUIT_KEYS = ["S","H","D","C"]; // 内部用
-const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"]; // Jokerは別扱い
+let G=null;
+let CPU={enabled:true,level:'normal'};
 
-function rankValue(r){
-  if(r === "A") return 1;
-  if(r === "J") return 11;
-  if(r === "Q") return 12;
-  if(r === "K") return 13;
-  if(r === "Joker") return 0;
-  return parseInt(r,10);
-}
-
-let G = null; // ゲーム全体状態
-let CPU = { enabled:true, level:'normal' };
-
-function buildCard(id, suitKey, rank){
-  return {id, suit:suitKey, rank, value:rankValue(rank)};
-}
-
-function buildFull54(){
-  const cards=[]; let id=0;
-  for(const s of SUIT_KEYS){
-    for(const r of RANKS){ cards.push(buildCard(id++, s, r)); }
-  }
-  // Joker x2
-  cards.push(buildCard(id++, "J", "Joker"));
-  cards.push(buildCard(id++, "J", "Joker"));
-  return cards;
-}
-
+function buildCard(id,s,r){ return {id,suit:s,rank:r,value:rankValue(r)}; }
+function buildFull54(){ const a=[]; let id=0; for(const s of SUIT_KEYS){ for(const r of RANKS){ a.push(buildCard(id++,s,r)); } } a.push(buildCard(id++,"J","Joker")); a.push(buildCard(id++,"J","Joker")); return a; }
 function buildEntry20(){
-  const picks = [
-    ["S",["A","2","3","4","5"]],
-    ["H",["A","8","9","10","J"]],
-    ["D",["A","3","7","10","Q"]],
-    ["C",["A","5","6","10","K"]],
-  ];
-  const cards=[]; let id=0;
-  for(const [s, ranks] of picks){
-    for(const r of ranks){ cards.push(buildCard(id++, s, r)); }
-  }
-  return cards;
+  const picks=[["S",["A","2","3","4","5"]],["H",["A","8","9","10","J"]],["D",["A","3","7","10","Q"]],["C",["A","5","6","10","K"]]];
+  const a=[]; let id=0; for(const [s,rs] of picks){ for(const r of rs){ a.push(buildCard(id++,s,r)); } } return a;
 }
-
-function shuffle(a){
-  for(let i=a.length-1;i>0;i--){ const j=(Math.random()* (i+1))|0; [a[i],a[j]]=[a[j],a[i]]; }
-  return a;
-}
-
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [a[i],a[j]]=[a[j],a[i]];} return a; }
 function deepClone(o){ return JSON.parse(JSON.stringify(o)); }
 
-function newPlayer(deck){
-  return {
-    life: deck.slice().reverse(), // top = life[life.length-1]
-    hand: [],
-    grave: [],
-    field: [], // キャラクター配列
-  };
-}
-
-function log(msg){ const el=document.getElementById("log"); el.textContent += msg+"\n"; el.scrollTop = el.scrollHeight; }
-
+function newPlayer(deck){ return { life:deck.slice().reverse(), hand:[], grave:[], field:[] }; }
+function log(t){ const el=document.getElementById("log"); el.textContent+=t+"\n"; el.scrollTop=el.scrollHeight; }
 function suitGlyph(s){ return s==="S"?"♠":s==="H"?"♡":s==="D"?"♢":"♣"; }
-
 function cardLabel(c){ return c.rank+" "+suitGlyph(c.suit); }
-
 function lifeCount(p){ return p.life.length; }
+function draw(p,n=1){ const res=[]; for(let i=0;i<n;i++){ if(p.life.length===0)break; res.push(p.life.pop()); } p.hand.push(...res); return res; }
+function takeDamage(p,d){ const moved=[]; for(let i=0;i<d;i++){ if(p.life.length===0)break; const top=p.life.pop(); p.grave.push(top); moved.push(top);} return moved; }
+function removeFrom(arr,pred){ const i=arr.findIndex(pred); if(i>=0) return arr.splice(i,1)[0]; return null; }
 
-function draw(p, n=1){
-  const res=[];
-  for(let i=0;i<n;i++){
-    if(p.life.length===0) break;
-    res.push(p.life.pop());
-  }
-  p.hand.push(...res);
-  return res;
-}
-
-function takeDamage(p, dmg){
-  let moved=[]; for(let i=0;i<dmg;i++){ if(p.life.length===0) break; const top=p.life.pop(); p.grave.push(top); moved.push(top); }
-  return moved;
-}
-
-function addToGrave(p, cards){
-  for(const c of cards){ p.grave.push(c); }
-}
-
-function removeFrom(arr, pred){
-  const idx = arr.findIndex(pred);
-  if(idx>=0){ return arr.splice(idx,1)[0]; }
-  return null;
-}
-
-// キャラクター表現: { cid, type:"soldier"|"bulwark", cards:[Card], drive:false, bornTurn:number }
 let nextCharId=1;
-
-function spawnCharacter(p, type, cards){
-  p.field.push({ cid: nextCharId++, type, cards: deepClone(cards), drive:false, bornTurn:G.turn });
-}
-
-function charPower(ch){
-  if(ch.type!=="bulwark") return ch.cards.reduce((a,c)=>a+rankValue(c.rank),0);
-  return 0; // 防壁はサイズ比較に使わない
-}
-
+function spawnCharacter(p,type,cards){ p.field.push({cid:nextCharId++,type,cards:deepClone(cards),drive:false,bornTurn:G.turn}); }
+function charPower(ch){ return ch.type!=="bulwark" ? ch.cards.reduce((a,c)=>a+rankValue(c.rank),0) : 0; }
 function isSoldier(ch){ return ch.type!=="bulwark"; }
-
-function hasReady(ch){ return !ch.drive; }
-
-function canAttack(ch){
-  // このターン場に出たキャラは不可（<速攻>未実装）
-  return isSoldier(ch) && hasReady(ch) && ch.bornTurn < G.turn;
-}
-
+function canAttack(ch){ return isSoldier(ch) && !ch.drive && ch.bornTurn < G.turn; }
 function anyChargedBulwark(p){ return p.field.some(ch=>ch.type==="bulwark" && !ch.drive); }
+function driveOneBulwark(p){ const t=p.field.find(ch=>ch.type==="bulwark" && !ch.drive); if(!t) return false; t.drive=true; return true; }
 
-function driveOneBulwark(p){ const t = p.field.find(ch=>ch.type==="bulwark" && !ch.drive); if(!t) return false; t.drive=true; return true; }
-
-function toGraveFromField(p, ch){
-  const idx = p.field.findIndex(x=>x.cid===ch.cid);
-  if(idx>=0){
-    const removed = p.field.splice(idx,1)[0];
-    p.grave.push(...removed.cards);
-    triggerGenerationShift(p, removed.cards);
-  }
-}
-
-function triggerGenerationShift(p, cards){
-  // Joker,A,J,Q,K が自分の場から墓地に行くたび誘発
-  const targets = cards.filter(c=>["Joker","A","J","Q","K"].includes(c.rank));
+function triggerGenerationShift(p,cards){
+  const targets=cards.filter(c=>["Joker","A","J","Q","K"].includes(c.rank));
   for(const _ of targets){
     while(p.life.length>0){
-      const top = p.life.pop();
-      if(["Joker","A","J","Q","K"].includes(top.rank)){
-        p.hand.push(top); break;
-      }else{
-        p.grave.push(top);
-      }
+      const top=p.life.pop();
+      if(["Joker","A","J","Q","K"].includes(top.rank)){ p.hand.push(top); break; }
+      p.grave.push(top);
     }
   }
 }
-
+function toGraveFromField(p,ch){
+  const idx=p.field.findIndex(x=>x.cid===ch.cid);
+  if(idx>=0){ const rm=p.field.splice(idx,1)[0]; p.grave.push(...rm.cards); triggerGenerationShift(p,rm.cards); }
+}
 function checkWin(){
-  const p0dead = G.players[0].life.length===0;
-  const p1dead = G.players[1].life.length===0;
-  if(p0dead||p1dead){
-    const msg = p0dead && p1dead ? "引き分け！両者ライフ0" : p0dead ? "プレイヤー2の勝ち！(P1ライフ0)" : "プレイヤー1の勝ち！(P2ライフ0)";
-    log("[勝敗] "+msg);
-    G.ended=true;
-    updateAll();
-  }
+  const p0dead=G.players[0].life.length===0, p1dead=G.players[1].life.length===0;
+  if(p0dead||p1dead){ const msg=p0dead&&p1dead?"引き分け！両者ライフ0":p0dead?"プレイヤー2の勝ち！(P1ライフ0)":"プレイヤー1の勝ち！(P2ライフ0)"; log("[勝敗] "+msg); G.ended=true; updateAll(); }
 }
 
 function startGame(){
-  const useE20 = document.getElementById('useEntry20').checked;
-  const deck0 = shuffle(useE20? buildEntry20(): buildFull54());
-  const deck1 = shuffle(useE20? buildEntry20(): buildFull54());
-  G = { turn:0, phase:"main", current:0, step:"main", selecting:null, ended:false,
-        players:[ newPlayer(deck0), newPlayer(deck1) ], attackCtx:null };
+  const e20=document.getElementById('useEntry20').checked;
+  const d0=shuffle(e20?buildEntry20():buildFull54());
+  const d1=shuffle(e20?buildEntry20():buildFull54());
+  G={turn:0,current:0,step:"main",ended:false,players:[newPlayer(d0),newPlayer(d1)],attackCtx:null};
 
-  // スタート手札：7枚
-  draw(G.players[0],7); draw(G.players[1],7);
-  log("[開始] 各プレイヤー手札7枚");
-
-  // プリセット配置（防壁→兵士）
-  for(let i=0;i<2;i++){
-    const p = G.players[i];
-    const bw = p.life.pop(); if(bw) spawnCharacter(p, "bulwark", [bw]);
-    const so = p.life.pop(); if(so) spawnCharacter(p, "soldier", [so]);
-  }
+  draw(G.players[0],7); draw(G.players[1],7); log("[開始] 各プレイヤー手札7枚");
+  for(let i=0;i<2;i++){ const p=G.players[i]; const bw=p.life.pop(); if(bw) spawnCharacter(p,"bulwark",[bw]); const so=p.life.pop(); if(so) spawnCharacter(p,"soldier",[so]); }
   log("[プリセット] 各プレイヤー: ライフ上から防壁→兵士を場へ");
 
-  // 先攻決定（同値ならP1先攻）
-  const a0 = G.players[0].life.pop(); const a1 = G.players[1].life.pop();
-  const v0 = a0?rankValue(a0.rank):-1; const v1=a1?rankValue(a1.rank):-1;
+  const a0=G.players[0].life.pop(), a1=G.players[1].life.pop();
+  const v0=a0?rankValue(a0.rank):-1, v1=a1?rankValue(a1.rank):-1;
   if(a0) G.players[0].grave.push(a0); if(a1) G.players[1].grave.push(a1);
-  G.current = (v1>v0)?1:0;
-  log("[先攻] "+(G.current===0?"P1":"P2"));
+  G.current=(v1>v0)?1:0; log("[先攻] "+(G.current===0?"P1":"P2"));
 
-  // 先攻1ドロー
   draw(G.players[G.current],1); log("[ゲーム開始] 先攻プレイヤーが1ドロー");
-
-  G.turn = 1; G.phase = "main"; G.step = "main";
-  updateAll();
+  G.turn=1; updateAll();
 }
 
-// ========== UI ==========
-function updateAll(){
-  if(!G) return;
-  document.getElementById('p0Life').textContent = lifeCount(G.players[0]);
-  document.getElementById('p1Life').textContent = lifeCount(G.players[1]);
-  document.getElementById('p0Hand').textContent = G.players[0].hand.length;
-  document.getElementById('p1Hand').textContent = (CPU.enabled? '—' : G.players[1].hand.length);
-  document.getElementById('p0Grave').textContent = G.players[0].grave.length;
-  document.getElementById('p1Grave').textContent = G.players[1].grave.length;
-  document.getElementById('turnInfo').textContent = G.ended?"ゲーム終了":`T${G.turn}｜${G.current===0?"P1":"P2"}のターン｜${G.step}`;
-
-  renderField(0, document.getElementById('p0Field'));
-  renderField(1, document.getElementById('p1Field'));
-  renderHand();
-
-  const me = G.players[G.current];
-  const isCpuTurn = CPU.enabled && G.current===1;
-  btnBulwark.disabled = !G || G.ended || me.life.length===0 || isCpuTurn;
-  btnSoldier.disabled = !G || G.ended || !anyChargedBulwark(me) || !me.hand.some(c=>c.rank.match(/^[2-9]|10$/)) || isCpuTurn;
-  btnHero.disabled    = !G || G.ended || !anyChargedBulwark(me) || me.life.length===0 || !me.hand.some(c=>["J","Q","K"].includes(c.rank)) || isCpuTurn;
-  btnAce.disabled     = !G || G.ended || me.life.length===0 || !me.hand.some(c=>c.rank==="A") || isCpuTurn;
-  btnAttack.disabled  = !G || G.ended || !G.players[G.current].field.some(canAttack) || G.step!=="main" || isCpuTurn;
-  btnEnd.disabled     = !G || G.ended || isCpuTurn;
-}
-
-function renderField(pi, mount){
-  const pls = G.players[pi];
-  mount.innerHTML = '';
+// ==== UI ====
+function renderField(pi,mount){
+  const pls=G.players[pi]; mount.innerHTML='';
   for(const ch of pls.field){
-    const box = document.createElement('div'); box.className='char'+(ch.drive?' drive':'')+(pi===G.current?' mine':'');
-    box.dataset.pid = pi; box.dataset.cid = ch.cid;
-    const title = document.createElement('div'); title.className='title'; title.textContent = ch.type==="bulwark"?"防壁":"兵士";
-    const val = document.createElement('div'); val.className='value'; val.textContent = ch.type==="bulwark"?"?":charPower(ch);
-    const tags = document.createElement('div'); tags.className='tags'; tags.textContent = (ch.drive?"ドライブ":"チャージ");
-    box.appendChild(title); box.appendChild(val); box.appendChild(tags);
-
-    // クリックで選択（攻撃/ブロック時）
-    box.addEventListener('click', ()=>onCharClick(pi, ch.cid, box));
-
+    const box=document.createElement('div'); box.className='char'+(ch.drive?' drive':'')+(pi===G.current?' mine':'');
+    const t=document.createElement('div'); t.className='title'; t.textContent=ch.type==="bulwark"?"防壁":"兵士";
+    const v=document.createElement('div'); v.className='value'; v.textContent=ch.type==="bulwark"?"?":charPower(ch);
+    const tg=document.createElement('div'); tg.className='tags'; tg.textContent=(ch.drive?"ドライブ":"チャージ");
+    box.append(t,v,tg);
+    box.addEventListener('click',()=>onCharClick(pi,ch.cid,box));
     mount.appendChild(box);
   }
 }
-
 function renderHand(){
-  const hand = document.getElementById('hand'); hand.innerHTML='';
-  const me = G.players[G.current];
+  const hand=document.getElementById('hand'); hand.innerHTML='';
+  const me=G.players[G.current];
   for(const c of me.hand){
-    const el = document.createElement('div'); el.className='card'; el.dataset.id=c.id;
-    const rk=document.createElement('div'); rk.className='rk'; rk.textContent=c.rank; el.appendChild(rk);
-    const st=document.createElement('div'); st.className='st'; st.textContent=suitGlyph(c.suit); el.appendChild(st);
-    el.addEventListener('click', ()=>onHandClick(c));
+    const el=document.createElement('div'); el.className='card'; el.dataset.id=c.id;
+    const rk=document.createElement('div'); rk.className='rk'; rk.textContent=c.rank;
+    const st=document.createElement('div'); st.className='st'; st.textContent=suitGlyph(c.suit);
+    el.append(rk,st); el.addEventListener('click',()=>onHandClick(c));
     hand.appendChild(el);
   }
 }
+function updateAll(){
+  if(!G) return;
+  const me=G.players[G.current];
+  document.getElementById('p0Life').textContent=lifeCount(G.players[0]);
+  document.getElementById('p1Life').textContent=lifeCount(G.players[1]);
+  document.getElementById('p0Hand').textContent=G.players[0].hand.length;
+  document.getElementById('p1Hand').textContent=(CPU.enabled?'—':G.players[1].hand.length);
+  document.getElementById('p0Grave').textContent=G.players[0].grave.length;
+  document.getElementById('p1Grave').textContent=G.players[1].grave.length;
+  document.getElementById('turnInfo').textContent=G.ended?"ゲーム終了":`T${G.turn}｜${G.current===0?"P1":"P2"}のターン｜${G.step}`;
+  renderField(0,document.getElementById('p0Field'));
+  renderField(1,document.getElementById('p1Field'));
+  renderHand();
+  const isCpuTurn=CPU.enabled&&G.current===1;
+  btnBulwark.disabled=!G||G.ended||me.life.length===0||isCpuTurn;
+  btnSoldier.disabled=!G||G.ended||!anyChargedBulwark(me)||!me.hand.some(c=>c.rank.match(/^[2-9]|10$/))||isCpuTurn;
+  btnHero.disabled=!G||G.ended||!anyChargedBulwark(me)||me.life.length===0||!me.hand.some(c=>["J","Q","K"].includes(c.rank))||isCpuTurn;
+  btnAce.disabled=!G||G.ended||me.life.length===0||!me.hand.some(c=>c.rank==="A")||isCpuTurn;
+  btnAttack.disabled=!G||G.ended||!G.players[G.current].field.some(canAttack)||G.step!=="main"||isCpuTurn;
+  btnEnd.disabled=!G||G.ended||isCpuTurn;
+}
 
-// ====== 入力ハンドラ ======
-let pending = null; // {type:"summonSoldier"|"summonHero"|"summonAce"}
-
+// ==== 入力 ====
+let pending=null;
 function onHandClick(card){
-  if(!G || G.ended) return;
-  const me = G.players[G.current];
-  if(!pending){ return; }
+  if(!G||G.ended) return;
+  const me=G.players[G.current];
+  if(!pending) return;
 
   if(pending.type==='summonSoldier'){
     if(!card.rank.match(/^[2-9]|10$/)){ log("[不可] 2-10のみ"); return; }
-    if(!anyChargedBulwark(me)){ log("[不可] コストB不足（防壁のチャージが必要）"); return; }
-    if(me.life.length<=0){ log("[不可] コストL不足（ダメージ不可）"); return; }
-    driveOneBulwark(me); takeDamage(me,1);
-    removeFrom(me.hand, c=>c.id===card.id);
-    spawnCharacter(me,"soldier",[card]);
-    log(`[召喚] 兵士 ${cardLabel(card)}（$BL 支払い：防壁ドライブ+1ダメージ）`);
-    pending=null; updateAll(); return;
+    if(!anyChargedBulwark(me)||me.life.length<=0){ log("[不可] コスト不足"); return; }
+    driveOneBulwark(me); takeDamage(me,1); removeFrom(me.hand,c=>c.id===card.id);
+    spawnCharacter(me,"soldier",[card]); log(`[召喚] 兵士 ${cardLabel(card)}（$BL）`); pending=null; updateAll(); return;
   }
   if(pending.type==='summonHero'){
     if(!["J","Q","K"].includes(card.rank)){ log("[不可] J/Q/Kのみ"); return; }
-    if(!anyChargedBulwark(me) || me.life.length<=0){ log("[不可] コスト不足（$BBL）"); return; }
-    // 支払い: B + B + L
-    driveOneBulwark(me); if(!anyChargedBulwark(me)){ log("[不可] 2体目のBが足りない"); return; } driveOneBulwark(me); takeDamage(me,1);
-    removeFrom(me.hand, c=>c.id===card.id);
-    spawnCharacter(me,"soldier",[card]);
-    log(`[召喚] 英雄 ${cardLabel(card)}（$BBL 支払い完了）`);
-    pending=null; updateAll(); return;
+    if(!anyChargedBulwark(me)||me.life.length<=0){ log("[不可] コスト不足"); return; }
+    driveOneBulwark(me); if(!anyChargedBulwark(me)){ log("[不可] 2体目のB不足"); return; }
+    driveOneBulwark(me); takeDamage(me,1); removeFrom(me.hand,c=>c.id===card.id);
+    spawnCharacter(me,"soldier",[card]); log(`[召喚] 英雄 ${cardLabel(card)}（$BBL）`); pending=null; updateAll(); return;
   }
   if(pending.type==='summonAce'){
     if(card.rank!=="A"){ log("[不可] Aのみ"); return; }
-    if(me.life.length<=0){ log("[不可] コストL不足（ダメージ不可）"); return; }
-    takeDamage(me,1);
-    removeFrom(me.hand, c=>c.id===card.id);
-    spawnCharacter(me,"soldier",[card]);
-    log(`[召喚] エース ${cardLabel(card)}（$L 支払い：1ダメージ）`);
-    pending=null; updateAll(); return;
+    if(me.life.length<=0){ log("[不可] コストL不足"); return; }
+    takeDamage(me,1); removeFrom(me.hand,c=>c.id===card.id);
+    spawnCharacter(me,"soldier",[card]); log(`[召喚] エース ${cardLabel(card)}（$L）`); pending=null; updateAll(); return;
+  }
+}
+function onCharClick(pi,cid,box){
+  if(!G||G.ended) return;
+  if(G.step==='attack'&&pi===G.current){
+    const me=G.players[pi]; const ch=me.field.find(x=>x.cid===cid);
+    if(!ch||!canAttack(ch)){ log("[不可] 指定不可"); return; }
+    ch.__attacking=!ch.__attacking; box.classList.toggle('sel');
+  }else if(G.step==='block'&&pi!==G.current){
+    const op=G.players[pi]; const ch=op.field.find(x=>x.cid===cid);
+    if(!ch||ch.drive){ log("[不可] ブロック不可"); return; }
+    ch.__blocking=!ch.__blocking; box.classList.toggle('sel');
   }
 }
 
-function onCharClick(pi, cid, box){
-  if(!G || G.ended) return;
-  if(G.step==='attack' && pi===G.current){
-    const me = G.players[pi]; const ch = me.field.find(x=>x.cid===cid);
-    if(!ch) return; if(!canAttack(ch)){ log("[不可] アタック指定できません"); return; }
-    ch.__attacking = !ch.__attacking; box.classList.toggle('sel');
-  } else if(G.step==='block' && pi!==G.current){
-    const op = G.players[pi]; const ch = op.field.find(x=>x.cid===cid);
-    if(!ch || ch.drive){ log("[不可] ブロック不可（ドライブ）"); return; }
-    ch.__blocking = !ch.__blocking; box.classList.toggle('sel');
-  }
-}
+// ==== ボタン ====
+const btnStart=document.getElementById('btnStart');
+const btnReset=document.getElementById('btnReset');
+const btnBulwark=document.getElementById('btnBulwark');
+const btnSoldier=document.getElementById('btnSoldier');
+const btnHero=document.getElementById('btnHero');
+const btnAce=document.getElementById('btnAce');
+const btnAttack=document.getElementById('btnAttack');
+const btnEnd=document.getElementById('btnEnd');
 
-// ====== アクション実行 ======
-const btnStart = document.getElementById('btnStart');
-const btnReset = document.getElementById('btnReset');
-const btnBulwark = document.getElementById('btnBulwark');
-const btnSoldier = document.getElementById('btnSoldier');
-const btnHero = document.getElementById('btnHero');
-const btnAce = document.getElementById('btnAce');
-const btnAttack = document.getElementById('btnAttack');
-const btnEnd = document.getElementById('btnEnd');
-
-btnStart.onclick = ()=>{ CPU.enabled = document.getElementById('cpuMode').checked; CPU.level = document.getElementById('cpuLevel').value; startGame(); if(CPU.enabled && G.current===1) scheduleCpuTurn(); };
-btnReset.onclick = ()=>{ location.reload(); };
-
-btnBulwark.onclick = ()=>{
+btnStart.onclick=()=>{ CPU.enabled=document.getElementById('cpuMode').checked; CPU.level=document.getElementById('cpuLevel').value; startGame(); if(CPU.enabled&&G.current===1) scheduleCpuTurn(); };
+btnReset.onclick=()=>{ location.reload(); };
+btnBulwark.onclick=()=>{ if(!G) return; const me=G.players[G.current]; if(me.life.length<=0){ log('[不可] $L不可'); return; } takeDamage(me,1); const top=me.hand.pop(); if(!top){ log('[不可] 手札空'); return; } spawnCharacter(me,'bulwark',[top]); log(`[防壁設置] ${cardLabel(top)}（$L）`); updateAll(); };
+btnSoldier.onclick=()=>{ pending={type:'summonSoldier'}; log('[選択] 手札から2-10をクリック（$BL）'); };
+btnHero.onclick=()=>{ pending={type:'summonHero'}; log('[選択] 手札からJ/Q/Kをクリック（$BBL）'); };
+btnAce.onclick =()=>{ pending={type:'summonAce'};  log('[選択] 手札からAをクリック（$L）'); };
+btnAttack.onclick=()=>{
   if(!G) return; const me=G.players[G.current];
-  if(me.life.length<=0){ log('[不可] $L支払い不可（ダメージ不可）'); return; }
-  takeDamage(me,1);
-  const top = me.hand.pop(); if(!top){ log('[不可] 手札が空です'); return; }
-  spawnCharacter(me,'bulwark',[top]);
-  log(`[防壁設置] ${cardLabel(top)} を裏向きで設置（$L支払い）`);
-  updateAll();
+  if(!me.field.some(canAttack)){ log('[不可] アタッカーなし'); return; }
+  G.step='attack'; updateAll(); log('[選択] アタッカーをクリック→もう一度「アタック」');
+  btnAttack.onclick=()=>confirmAttack();
 };
-
-btnSoldier.onclick = ()=>{ pending={type:'summonSoldier'}; log('[選択] 手札から 2-10 を1枚クリックして兵士召喚 ($BL)'); };
-btnHero.onclick = ()=>{ pending={type:'summonHero'}; log('[選択] 手札から J/Q/K を1枚クリックして英雄召喚 ($BBL)'); };
-btnAce.onclick = ()=>{ pending={type:'summonAce'}; log('[選択] 手札から A を1枚クリックしてエース召喚 ($L)'); };
-
-btnAttack.onclick = ()=>{
-  if(!G) return;
-  const me = G.players[G.current];
-  if(!me.field.some(canAttack)){ log('[不可] 指定可能なアタッカーがいません'); return; }
-  G.step='attack'; updateAll();
-  log('[選択] アタックさせる兵士をクリック→もう一度「アタック」を押して確定');
-  btnAttack.onclick = ()=>confirmAttack();
-};
-
 function confirmAttack(){
-  const me = G.players[G.current];
-  const attackers = me.field.filter(ch=>ch.__attacking);
+  const me=G.players[G.current]; const attackers=me.field.filter(ch=>ch.__attacking);
   if(attackers.length===0){ log('[不可] アタッカー未指定'); G.step='main'; updateAll(); resetAttackBtn(); return; }
   for(const a of attackers){ a.drive=true; delete a.__attacking; }
-  G.attackCtx = { attackers: attackers.map(a=>({pid:G.current, cid:a.cid})) };
-  log(`[アタック] ${attackers.length} 体で攻撃！ ブロックに進みます`);
-  G.step='block'; updateAll();
-  btnAttack.disabled = true;
-  setTimeout(()=>promptBlock(), 100);
+  G.attackCtx={attackers:attackers.map(a=>({pid:G.current,cid:a.cid}))}; log(`[アタック] ${attackers.length} 体で攻撃！`);
+  G.step='block'; updateAll(); btnAttack.disabled=true; setTimeout(()=>promptBlock(),100);
 }
-
 function promptBlock(){
-  log('[選択] 防御側：ブロックに使うキャラクターをクリック（兵士は複数指定可、防壁は1体を想定）。選択後「エンド」を押すと確定。');
-  const prevEnd = btnEnd.onclick;
-  btnEnd.onclick = ()=>{
-    performDamage();
-    btnEnd.onclick = prevEnd; resetAttackBtn();
-  };
+  log('[選択] 防御側：ブロックするキャラクターをクリック→「エンド」で確定');
+  const prev=btnEnd.onclick; btnEnd.onclick=()=>{ performDamage(); btnEnd.onclick=prev; resetAttackBtn(); };
 }
-
-function resetAttackBtn(){ btnAttack.onclick = ()=>{
-  G.step='attack'; updateAll(); log('[選択] アタックさせる兵士をクリック→もう一度「アタック」で確定'); btnAttack.onclick = ()=>confirmAttack(); };
-}
+function resetAttackBtn(){ btnAttack.onclick=()=>{ G.step='attack'; updateAll(); log('[選択] アタッカーを選んで再度「アタック」'); btnAttack.onclick=()=>confirmAttack(); }; }
 
 function performDamage(){
-  const atkSide = G.current; const defSide = 1-G.current;
-  const me = G.players[atkSide]; const op = G.players[defSide];
-  const attackers = me.field.filter(ch=>ch.drive && isSoldier(ch));
-
-  let blockers = op.field.filter(ch=>ch.__blocking);
-  if(CPU.enabled && defSide===1 && G.step==='block'){
-    blockers = cpuChooseBlocks(attackers, op);
-  }
-
+  const atkSide=G.current, defSide=1-G.current;
+  const me=G.players[atkSide], op=G.players[defSide];
+  const attackers=me.field.filter(ch=>ch.drive && isSoldier(ch));
+  let blockers=op.field.filter(ch=>ch.__blocking);
+  if(CPU.enabled && defSide===1 && G.step==='block'){ blockers=cpuChooseBlocks(attackers,op); }
   attackers.sort((a,b)=>charPower(b)-charPower(a));
-  let remainingBlockers = blockers.slice();
-  const results = [];
-
+  let remaining=blockers.slice(); const results=[];
   for(const a of attackers){
-    let bs = [];
-    const bw = remainingBlockers.find(b=>b.type==='bulwark');
-    if(bw){ bs=[bw]; remainingBlockers = remainingBlockers.filter(x=>x!==bw); }
-    else{
-      bs = pickBestBlockersFor(a, remainingBlockers);
-      remainingBlockers = remainingBlockers.filter(b=>!bs.includes(b));
-    }
-
-    if(bs.length===0){
-      const dmg = charPower(a);
-      takeDamage(op, dmg);
-      results.push(`直接 ${dmg} ダメージ`);
-    } else if(bs[0].type==='bulwark'){
-      const bwc = bs[0].cards[0];
-      const aRanks = a.cards.map(c=>c.rank);
-      const kill = (bwc.rank==='Joker') || aRanks.includes(bwc.rank);
-      if(kill){ toGraveFromField(me, a); results.push(`防壁(${cardLabel(bwc)})で撃退`); }
-      toGraveFromField(op, bs[0]);
-    } else {
-      const aP = charPower(a);
-      const bP = bs.reduce((s,x)=>s+charPower(x),0);
-      if(aP>bP){ for(const b of bs) toGraveFromField(op, b); }
-      else if(aP<bP){ toGraveFromField(me, a); }
-      else { for(const b of bs) toGraveFromField(op, b); toGraveFromField(me, a); }
+    let bs=[]; const bw=remaining.find(b=>b.type==='bulwark');
+    if(bw){ bs=[bw]; remaining=remaining.filter(x=>x!==bw); }
+    else{ bs=pickBestBlockersFor(a,remaining); remaining=remaining.filter(b=>!bs.includes(b)); }
+    if(bs.length===0){ const dmg=charPower(a); takeDamage(op,dmg); results.push(`直接 ${dmg} ダメージ`); }
+    else if(bs[0].type==='bulwark'){
+      const bwc=bs[0].cards[0]; const ranks=a.cards.map(c=>c.rank); const kill=(bwc.rank==='Joker')||ranks.includes(bwc.rank);
+      if(kill){ toGraveFromField(me,a); results.push(`防壁(${cardLabel(bwc)})で撃退`); }
+      toGraveFromField(op,bs[0]);
+    }else{
+      const aP=charPower(a), bP=bs.reduce((s,x)=>s+charPower(x),0);
+      if(aP>bP){ for(const b of bs) toGraveFromField(op,b); }
+      else if(aP<bP){ toGraveFromField(me,a); }
+      else { for(const b of bs) toGraveFromField(op,b); toGraveFromField(me,a); }
     }
   }
-
-  op.field.forEach(x=>{ delete x.__blocking; });
-  G.step='main';
-  updateAll();
-  log('[ダメージ判定] '+ (results.length? results.join(' ／ '): '結果なし') );
-  checkWin();
+  op.field.forEach(x=>delete x.__blocking);
+  G.step='main'; updateAll(); log('[ダメージ判定] '+(results.length?results.join(' ／ '):'結果なし')); checkWin();
 }
 
-btnEnd.onclick = ()=>{
-  if(!G) return; const me=G.players[G.current];
-  while(me.hand.length>7){ const d = me.hand.pop(); me.grave.push(d); log(`[手札調整] ${cardLabel(d)} を捨て札`); }
-  endTurn();
-};
-
+btnEnd.onclick=()=>{ if(!G) return; const me=G.players[G.current]; while(me.hand.length>7){ const d=me.hand.pop(); me.grave.push(d); log(`[手札調整] ${cardLabel(d)} を捨て札`);} endTurn(); };
 function endTurn(){
-  const me = G.players[G.current];
-  log(`[エンド] P${G.current+1} のターン終了 → チャージ`);
-  me.field.forEach(ch=>{ ch.drive=false; });
-  draw(me,1); log(`[ドロー] P${G.current+1} が1枚引く`);
-  G.current = 1-G.current; G.turn++; G.step='main';
-  updateAll();
-  if(CPU.enabled && G.current===1 && !G.ended){ scheduleCpuTurn(); }
+  const me=G.players[G.current]; log(`[エンド] P${G.current+1} のターン終了 → チャージ`);
+  me.field.forEach(ch=>ch.drive=false); draw(me,1); log(`[ドロー] P${G.current+1} が1枚引く`);
+  G.current=1-G.current; G.turn++; G.step='main'; updateAll(); if(CPU.enabled&&G.current===1&&!G.ended) scheduleCpuTurn();
 }
 
-// ===== CPUロジック =====
-function scheduleCpuTurn(){ setTimeout(cpuTurn, 350); }
+// ===== CPU =====
+function scheduleCpuTurn(){ setTimeout(cpuTurn,350); }
+function cpuPolicy(){ if(CPU.level==='easy') return {bulwarkProb:0.5,cautious:false,order:['soldier','ace','hero']};
+  if(CPU.level==='hard') return {bulwarkProb:1.0,cautious:true, order:['hero','ace','soldier']};
+  return {bulwarkProb:1.0,cautious:false,order:['hero','ace','soldier']}; }
 
-function cpuPolicy(){
-  if(CPU.level==='easy') return {bulwarkProb:0.5, cautious:false, order:['soldier','ace','hero']};
-  if(CPU.level==='hard') return {bulwarkProb:1.0, cautious:true, order:['hero','ace','soldier']};
-  return {bulwarkProb:1.0, cautious:false, order:['hero','ace','soldier']}; // normal
+function pickBestBlockersFor(attacker,pool){
+  const soldiers=pool.filter(x=>x.type!=='bulwark').sort((a,b)=>charPower(a)-charPower(b));
+  const target=charPower(attacker);
+  if(CPU.level==='easy'){ return soldiers.length?[soldiers[soldiers.length-1]]:[]; }
+  let chosen=[],sum=0; for(const s of soldiers){ chosen.push(s); sum+=charPower(s); if(sum>=target) break; }
+  if(sum>=target) return chosen; return soldiers.length?[soldiers[soldiers.length-1]]:[];
 }
-
-// 難易度対応 pickBestBlockersFor
-function pickBestBlockersFor(attacker, pool){
-  const soldiers = pool.filter(x=>x.type!=='bulwark').sort((a,b)=>charPower(a)-charPower(b));
-  const target = charPower(attacker);
-  if(CPU.level==='easy'){
-    return soldiers.length? [soldiers[soldiers.length-1]]: [];
-  }
-  let chosen=[]; let sum=0;
-  for(const s of soldiers){ chosen.push(s); sum+=charPower(s); if(sum>=target) break; }
-  if(sum>=target) return chosen;
-  return soldiers.length? [soldiers[soldiers.length-1]]: [];
-}
-
-// 難易度対応 cpuChooseBlocks
-function cpuChooseBlocks(attackers, defender){
-  const pool = defender.field.filter(ch=>!ch.drive);
-  const res=[];
-  const bw = pool.find(x=>x.type==='bulwark');
+function cpuChooseBlocks(attackers,defender){
+  const pool=defender.field.filter(ch=>!ch.drive); const res=[];
+  const bw=pool.find(x=>x.type==='bulwark');
   if(CPU.level==='hard'){
-    if(bw){
-      const best = [...attackers].sort((a,b)=>charPower(b)-charPower(a))[0];
-      const ranks=
+    if(bw){ const best=[...attackers].sort((a,b)=>charPower(b)-charPower(a))[0];
+      const ranks=best.cards.map(c=>c.rank); const bwc=bw.cards[0];
+      if(bwc.rank==='Joker'||ranks.includes(bwc.rank)) res.push(bw);
+    }
+  }else{ if(bw) res.push(bw); }
+  const avail=pool.filter(x=>x.type!=='bulwark');
+  attackers.sort((a,b)=>charPower(b)-charPower(a));
+  for(const a of attackers){ const pick=pickBestBlockersFor(a,avail.filter(x=>!res.includes(x))); res.push(...pick); }
+  return res;
+}
+function cpuTurn(){
+  if(!CPU.enabled||!G||G.ended||G.current!==1) return;
+  const pol=cpuPolicy(); const me=G.players[1];
+
+  // 防壁
+  if(!me.field.some(ch=>ch.type==='bulwark') && me.life.length>0){
+    if(Math.random() < pol.bulwarkProb){
+      takeDamage(me,1); const top=me.hand.pop(); if(top){ spawnCharacter(me,'bulwark',[top]); log('[CPU] 防壁設置'); updateAll(); return scheduleCpuTurn(); }
+    }
+  }
+  // 召喚
+  const hasB=anyChargedBulwark(me);
+  const trySummon=(k)=>{
+    if(k==='hero'){ const c=me.hand.find(x=>['J','Q','K'].includes(x.rank));
+      if(c && hasB && me.life.length>0){ if(driveOneBulwark(me)){ if(anyChargedBulwark(me)){ driveOneBulwark(me); takeDamage(me,1); removeFrom(me.hand,x=>x.id===c.id); spawnCharacter(me,'soldier',[c]); log('[CPU] 英雄召喚'); updateAll(); return true; } } } }
+    if(k==='ace'){ const c=me.hand.find(x=>x.rank==='A'); if(c && me.life.length>0){ takeDamage(me,1); removeFrom(me.hand,x=>x.id===c.id); spawnCharacter(me,'soldier',[c]); log('[CPU] エース召喚'); updateAll(); return true; } }
+    if(k==='soldier'){ const c=me.hand.find(x=>x.rank.match(/^[2-9]|10$/)); if(c && hasB && me.life.length>0){ driveOneBulwark(me); takeDamage(me,1); removeFrom(me.hand,x=>x.id===c.id); spawnCharacter(me,'soldier',[c]); log('[CPU] 兵士召喚'); updateAll(); return true; } }
+    return false;
+  };
+  for(const k of pol.order){ if(trySummon(k)){ return scheduleCpuTurn(); } }
+
+  // 攻撃
+  const attackers=me.field.filter(canAttack).sort((a,b)=>charPower(b)-charPower(a));
+  if(attackers.length>0){
+    let go=true;
+    if(pol.cautious){
+      const op=G.players[0];
+      const blockPow=op.field.filter(x=>!x.drive && x.type!=='bulwark').reduce((s,x)=>s+charPower(x),0);
+      const atkPow=attackers.reduce((s,x)=>s+charPower(x),0);
+      const hasBW=op.field.some(x=>x.type==='bulwark' && !x.drive);
+      const estLoss=hasBW?2:0;
+      go = (atkPow > blockPow + estLoss);
+    }
+    if(go){
+      attackers.forEach(a=>a.drive=true); G.attackCtx={attackers:attackers.map(a=>({pid:1,cid:a.cid}))};
+      G.step='block'; updateAll(); log('[CPU] アタック宣言');
+      const human=G.players[0]; const blocks=cpuChooseBlocks(attackers,human); human.field.forEach(x=>x.__blocking=blocks.includes(x));
+      performDamage(); if(!G.ended) return scheduleCpuTurn(); else return;
+    }
+  }
+  // エンド
+  while(me.hand.length>7){ const d=me.hand.pop(); me.grave.push(d); }
+  log('[CPU] エンド'); endTurn();
+}
+
+// 初期描画
+updateAll();
+</script>
+</body>
+</html>
